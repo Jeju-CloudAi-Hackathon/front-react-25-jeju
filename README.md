@@ -1,70 +1,57 @@
-# Getting Started with Create React App
+# PestsFree - 드론 기반 해충 탐지 시스템
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+## 프로젝트 소개
+PestsFree는 드론을 활용하여 농작물의 해충을 실시간으로 탐지하고 관리하는 스마트 농업 솔루션입니다. 
+드론이 지정된 경로를 따라 이동하며 해충을 탐지하고, 발견된 해충의 위치를 지도상에 표시하여 효율적인 방제 작업을 지원합니다.
 
-## Available Scripts
+## 주요 기능
+- 실시간 GPS 기반 위치 추적
+- 드론 연결 및 상태 모니터링
+- 해충 탐지 및 위치 기록
+- 위성 지도 기반 시각화
+- 탐지 결과 실시간 확인
+- 상세 정보 조회 및 위치 이동
 
-In the project directory, you can run:
+## 기술 스택
+- React
+- Tailwind CSS
+- Google Maps API
+- AWS Amplify
+- AWS S3
 
-### `npm start`
+## 설치 및 실행
+1. 저장소 클론
+```bash
+git clone https://github.com/Jeju-CloudAi-Hackathon/front-react-25-jeju.git
+cd front-react-25-jeju
+```
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+2. 의존성 설치
+```bash
+npm install
+```
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+3. 환경 변수 설정
+`.env` 파일을 생성하고 다음 내용을 추가:
+```
+REACT_APP_GOOGLE_MAPS_API_KEY=your_google_maps_api_key
+```
 
-### `npm test`
+4. 개발 서버 실행
+```bash
+npm start
+```
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## 사용 방법
+1. 시스템 시작하기 버튼 클릭
+2. GPS 위치 확인 및 드론 연결 대기
+3. 탐색 시작 버튼으로 해충 탐지 시작
+4. 실시간으로 탐지 현황 확인
+5. 탐지 완료 후 상세 정보에서 발견 위치 확인
 
-### `npm run build`
+## 팀 정보
+- 제주 클라우드 AI 해커톤
+- 팀 25
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
-
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
-
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
-
-### `npm run eject`
-
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
-
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
-
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
-
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
-
-## Learn More
-
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+## 라이선스
+This project is licensed under the MIT License
