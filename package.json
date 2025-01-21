@@ -3,7 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.731.1",
     "@aws-sdk/client-sns": "^3.731.1",
+    "@aws-sdk/lib-dynamodb": "^3.731.1",
     "autoprefixer": "^10.4.20",
     "axios": "^1.7.9",
     "cra-template": "1.2.0",
