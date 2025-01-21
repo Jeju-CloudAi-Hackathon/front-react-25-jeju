@@ -88,7 +88,6 @@ const GoogleMap = ({ markers, coordinates, onPathCreated, isDrawingPath, onMapRe
   const mapRef = useRef(null);
   const mapInstance = useRef(null);
   const markersRef = useRef([]);
-  const pollingRef = useRef(null);
 
   // mapInstance나 markers가 업데이트될 때마다 부모 컴포넌트에 전달
   useEffect(() => {
@@ -218,83 +217,6 @@ const GoogleMap = ({ markers, coordinates, onPathCreated, isDrawingPath, onMapRe
     };
   }, [coordinates]);
 
-  // 롱폴링 함수
-  const startPolling = async (markerId) => {
-    let attempts = 0;
-    const maxAttempts = 20; // 최대 100초 (5초 * 20)
-    
-    const pollStatus = async () => {
-      try {
-        const response = await fetch(`https://[YOUR_API_GATEWAY_URL]/status/${markerId}`);
-        const data = await response.json();
-        
-        if (response.status === 200) {
-          // 최종 결과가 준비된 경우
-          if (pollingRef.current === markerId) {
-            // 마커 정보 업데이트
-            const updatedMarker = markersRef.current.find(m => m.id === markerId);
-            if (updatedMarker) {
-              updatedMarker.detectionResult = data.result;
-              // InfoWindow 내용 업데이트
-              if (updatedMarker.infoWindow) {
-                updatedMarker.infoWindow.setContent(
-                  generateInfoWindowContent(data.result)
-                );
-              }
-            }
-          }
-          return true;
-        } else if (response.status === 202) {
-          // 아직 처리 중인 경우
-          attempts++;
-          if (attempts >= maxAttempts) {
-            console.log('Polling timeout');
-            return true;
-          }
-          return false;
-        }
-      } catch (error) {
-        console.error('Polling error:', error);
-        return true;
-      }
-    };
-
-    // 이전 폴링 중지
-    if (pollingRef.current && pollingRef.current !== markerId) {
-      pollingRef.current = null;
-    }
-
-    // 새로운 폴링 시작
-    pollingRef.current = markerId;
-    
-    const poll = async () => {
-      const shouldStop = await pollStatus();
-      if (!shouldStop && pollingRef.current === markerId) {
-        setTimeout(poll, 5000);
-      }
-    };
-
-    poll();
-  };
-
-  // InfoWindow 내용 생성 함수
-  const generateInfoWindowContent = (data) => {
-    const detectionType = data.pest ? 'pest' : (data.disease ? 'disease' : null);
-    return `<div class="p-2" style="margin:0;padding:8px;font-family:'Noto Sans KR',sans-serif;">
-      위도: ${data.latitude}
-      경도: ${data.longitude}
-      <p class="font-medium ${detectionType === 'pest' ? 'text-red-600' : 'text-yellow-800'}" 
-         style="margin:4px 0;">
-        ${detectionType === 'pest' ? '충해 발견' : '병해 발견'}
-      </p>
-      <img src="${data.imglink}" 
-        alt="발견된 ${detectionType === 'pest' ? '해충' : '병해'}" 
-        style="width:200px;height:150px;object-fit:cover;margin-top:8px;" />
-      ${data.st ? '<p style="color:green;margin-top:4px;">✓ 분석 완료</p>' : 
-                  '<p style="color:orange;margin-top:4px;">⟳ 분석 중...</p>'}
-    </div>`;
-  };
-
   // 마커 업데이트
   useEffect(() => {
     if (!mapInstance.current || !window.google || !window.google.maps) return;
@@ -311,9 +233,21 @@ const GoogleMap = ({ markers, coordinates, onPathCreated, isDrawingPath, onMapRe
     markersRef.current = [];
 
     markers.forEach((markerData) => {
-      const { lat, lng, detectionType, imglink } = markerData;
+      const { lat, lng, detectionType } = markerData;
 
       if (detectionType) {
+        const infowindowContent = detectionType === 'pest' ? 
+          `<div class="p-2" style="margin:0;padding:8px;font-family:'Noto Sans KR',sans-serif;">위도: ${lat.toFixed(6)}
+경도: ${lng.toFixed(6)}
+<p class="font-medium text-red-600" style="margin:4px 0;">충해 발견</p>
+<img src="https://jeju-cloud-03-bugimagetest.s3.us-east-1.amazonaws.com/bugbug.jpeg" 
+  alt="발견된 해충" style="width:200px;height:150px;object-fit:cover;margin-top:8px;" /></div>` 
+        : `<div class="p-2" style="margin:0;padding:8px;font-family:'Noto Sans KR',sans-serif;">위도: ${lat.toFixed(6)}
+경도: ${lng.toFixed(6)}
+<p class="font-medium text-yellow-800" style="margin:4px 0;">병해 발견</p>
+<img src="https://jeju-cloud-03-bugimagetest.s3.us-east-1.amazonaws.com/disease.jpeg" 
+  alt="발견된 병해" style="width:200px;height:150px;object-fit:cover;margin-top:8px;" /></div>`;
+
         const markerIcon = {
           path: window.google.maps.SymbolPath.CIRCLE,
           scale: 8,
@@ -330,7 +264,7 @@ const GoogleMap = ({ markers, coordinates, onPathCreated, isDrawingPath, onMapRe
         });
 
         const infoWindow = new window.google.maps.InfoWindow({
-          content: generateInfoWindowContent(markerData)
+          content: infowindowContent,
         });
 
         mapMarker.addListener('click', () => {
@@ -340,14 +274,9 @@ const GoogleMap = ({ markers, coordinates, onPathCreated, isDrawingPath, onMapRe
             }
           });
           infoWindow.open(mapInstance.current, mapMarker);
-          
-          // 마커 클릭 시 상태 폴링 시작
-          const markerId = `${lat}-${lng}`;
-          startPolling(markerId);
         });
 
         markersRef.current.push({
-          id: `${lat}-${lng}`,
           mapMarker,
           infoWindow,
           ...markerData
@@ -375,104 +304,217 @@ const GoogleMapWithRef = forwardRef(GoogleMap);
 
 // 시스템 점검 화면 컴포넌트
 const SystemCheckScreen = ({ onLogoClick }) => {
-  const [connected, setConnected] = useState(false);
-  const [locationChecked, setLocationChecked] = useState(false);
-  const [currentLocation, setCurrentLocation] = useState(null);
+  const [status, setStatus] = useState({
+    location: false,
+    droneConnection: false
+  });
+  const [coordinates, setCoordinates] = useState(null);
+  const [locationError, setLocationError] = useState(null);
   const [searchStarted, setSearchStarted] = useState(false);
   const [markers, setMarkers] = useState([]);
-  const [currentFileIndex, setCurrentFileIndex] = useState(1);
-  const [error, setError] = useState(null);
-  const [elapsedTime, setElapsedTime] = useState(0);
-  const [searchResults, setSearchResults] = useState([]);
+  const [searchResults, setSearchResults] = useState(null);
   const [showResults, setShowResults] = useState(false);
-  const [mapRefs, setMapRefs] = useState(null);
   const mapRef = useRef(null);
+  const [elapsedTime, setElapsedTime] = useState(0);
+  const markersRef = useRef([]);
+  const mapInstance = useRef(null);
 
-  // S3 데이터를 가져오는 함수
-  const fetchS3Data = async (fileNumber) => {
-    try {
-      const response = await fetch(`https://jeju-cloud-03-bugimagetest.s3.us-east-1.amazonaws.com/data${String(fileNumber).padStart(2, '0')}.json`);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      return data;
-    } catch (error) {
-      console.error('Error fetching data:', error);
-      setError(error.message);
-      return null;
-    }
-  };
-
-  // 마커 데이터 처리 함수
-  const processMarkerData = (data) => {
-    if (!data || !data.length) return;
+  const getLocation = () => {
+    setLocationError(null);
+    setStatus(prev => ({ ...prev, location: false }));
     
-    const newMarker = {
-      lat: parseFloat(data[0].latitude),
-      lng: parseFloat(data[0].longitude),
-      detectionType: data[0].pest ? 'pest' : (data[0].disease ? 'disease' : null),
-      imglink: data[0].imglink
+    if (!navigator.geolocation) {
+      setLocationError('브라우저가 위치 정보를 지원하지 않습니다.');
+      return;
+    }
+
+    const options = {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
     };
 
-    setMarkers(prevMarkers => [...prevMarkers, newMarker]);
-    if (mapRef.current) {
-      mapRef.current.moveToLocation(newMarker.lat, newMarker.lng);
-    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setCoordinates({
+          lat: position.coords.latitude,
+          lng: position.coords.longitude,
+          accuracy: position.coords.accuracy
+        });
+        setStatus(prev => ({ ...prev, location: true }));
+        setLocationError(null);
+      },
+      (error) => {
+        let errorMessage;
+        switch (error.code) {
+          case 1:
+            errorMessage = '위치 정보 접근 권한이 거부되었습니다. 브라우저 설정에서 권한을 허용해주세요.';
+            break;
+          case 2:
+            errorMessage = '현재 위치 정보를 사용할 수 없습니다. 잠시 후 다시 시도해주세요.';
+            break;
+          case 3:
+            errorMessage = '위치 정보 요청 시간이 초과되었습니다. 네트워크 연결을 확인해주세요.';
+            break;
+          default:
+            errorMessage = `위치 정보를 가져오는 중 오류가 발생했습니다. (${error.message})`;
+        }
+        setLocationError(errorMessage);
+        setStatus(prev => ({ ...prev, location: false }));
+      },
+      options
+    );
   };
 
-  // 주기적으로 데이터를 가져오는 효과
   useEffect(() => {
-    let interval;
-    if (searchStarted) {
+    // 초기 위치 정보 가져오기
+    getLocation();
+
+    // 드론 연결 시뮬레이션
+    const droneConnectionTimeout = setTimeout(() => {
+      setStatus(prev => ({ ...prev, droneConnection: true }));
+    }, 2000);
+
+    return () => {
+      clearTimeout(droneConnectionTimeout);
+    };
+  }, []);
+
+  // 임시 객체 인식 시뮬레이션
+  useEffect(() => {
+    if (searchStarted && coordinates) {
+      const detectedMarkers = [];
+      let lastPosition = {
+        lat: coordinates.lat,
+        lng: coordinates.lng
+      };
+
+      // 경과 시간 타이머 설정
       const startTime = Date.now();
-      interval = setInterval(async () => {
-        if (currentFileIndex <= 5) {
-          const data = await fetchS3Data(currentFileIndex);
-          if (data) {
-            processMarkerData(data);
-            setCurrentFileIndex(prev => prev + 1);
-          }
-          setElapsedTime(Math.floor((Date.now() - startTime) / 1000));
-          if (currentFileIndex === 5) {
-            clearInterval(interval);
-            setSearchStarted(false);
-            setSearchResults(markers);
+      const timeInterval = setInterval(() => {
+        const elapsed = Math.floor((Date.now() - startTime) / 1000);
+        setElapsedTime(elapsed);
+      }, 1000);
+
+      let direction = 1;
+      let row = 0;
+      const stepSize = 0.0002;
+      const rowHeight = 0.0001;
+      const diagonalFactor = 0.3;
+
+      const simulatePestDetection = () => {
+        const diagonalOffset = direction * stepSize * diagonalFactor;
+        lastPosition = {
+          lat: lastPosition.lat + diagonalOffset,
+          lng: lastPosition.lng + (stepSize * direction)
+        };
+
+        const maxDistance = 0.002;
+        if (Math.abs(lastPosition.lng - coordinates.lng) > maxDistance) {
+          row++;
+          const newRow = coordinates.lat + (row * rowHeight);
+          lastPosition = {
+            lat: newRow + (diagonalOffset * 2),
+            lng: direction > 0 ? 
+              coordinates.lng + maxDistance : 
+              coordinates.lng - maxDistance
+          };
+          direction *= -1;
+        }
+
+        const isPestDetected = Math.random() > 0.7;
+        const isDiseaseDetected = !isPestDetected && Math.random() > 0.7;
+        const detectionType = isPestDetected ? 'pest' : (isDiseaseDetected ? 'disease' : null);
+
+        const newMarker = { 
+          ...lastPosition,
+          detectionType
+        };
+
+        if (detectionType) {
+          detectedMarkers.push(newMarker);
+          setMarkers([...detectedMarkers]);
+          
+          // 새로운 감지 시에는 중심만 이동
+          if (mapInstance.current) {
+            mapInstance.current.setCenter({ lat: lastPosition.lat, lng: lastPosition.lng });
           }
         }
-      }, 5000);
+      };
+
+      const detectionInterval = setInterval(simulatePestDetection, 3000);
+
+      const searchTimeout = setTimeout(() => {
+        clearInterval(detectionInterval);
+        clearInterval(timeInterval);
+        setSearchStarted(false);
+        setSearchResults(detectedMarkers);
+        setElapsedTime(0);
+        const pestCount = detectedMarkers.filter(marker => marker.detectionType === 'pest').length;
+        const diseaseCount = detectedMarkers.filter(marker => marker.detectionType === 'disease').length;
+        alert(`탐색이 완료되었습니다.\n충해: ${pestCount}건\n병해: ${diseaseCount}건이 발견되었습니다.`);
+      }, 30000);
+
+      return () => {
+        clearInterval(detectionInterval);
+        clearInterval(timeInterval);
+        clearTimeout(searchTimeout);
+      };
     }
-    return () => clearInterval(interval);
-  }, [searchStarted, currentFileIndex, markers]);
+  }, [searchStarted, coordinates]);
 
   const handleStartSearch = () => {
     setSearchStarted(true);
-    setCurrentFileIndex(1);
     setMarkers([]);
-    setSearchResults([]);
+    setSearchResults(null);
     setShowResults(false);
     setElapsedTime(0);
   };
 
   // 목록에서 위치 클릭 시 동작하는 함수
   const handleLocationClick = (lat, lng) => {
-    if (mapRef.current) {
-      mapRef.current.moveToLocation(lat, lng);
+    if (mapInstance.current) {
+      // 먼저 모든 InfoWindow 닫기
+      markersRef.current.forEach(marker => {
+        if (marker.infoWindow) {
+          marker.infoWindow.close();
+        }
+      });
+
+      // 현재 중심점과 목표 지점 사이의 중간 지점 계산
+      const currentCenter = mapInstance.current.getCenter();
+      const midLat = (currentCenter.lat() + lat) / 2;
+      const midLng = (currentCenter.lng() + lng) / 2;
+      
+      // 현재 줌 레벨 저장
+      const currentZoom = mapInstance.current.getZoom();
+      
+      // 중간 지점으로 부드럽게 이동
+      mapInstance.current.panTo({ lat: midLat, lng: midLng });
+      
+      // 위치 이동 후 최종 목적지로 이동하며 줌인
+      setTimeout(() => {
+        mapInstance.current.panTo({ lat, lng });
+        if (currentZoom < 18) {
+          mapInstance.current.setZoom(18);
+        }
+        
+        // 해당 마커의 InfoWindow 열기
+        const clickedMarker = markersRef.current.find(
+          marker => marker.lat === lat && marker.lng === lng
+        );
+        if (clickedMarker && clickedMarker.infoWindow) {
+          clickedMarker.infoWindow.open(mapInstance.current, clickedMarker.mapMarker);
+        }
+      }, 300);
     }
   };
 
-  useEffect(() => {
-    // 초기 위치 정보 설정
-    setCurrentLocation({ lat: 33.450701, lng: 126.570667 });
-    setLocationChecked(true);
-    
-    // 드론 연결 시뮬레이션
-    const droneConnectionTimeout = setTimeout(() => {
-      setConnected(true);
-    }, 2000);
-
-    return () => clearTimeout(droneConnectionTimeout);
-  }, []);
+  // GoogleMap 컴포넌트에서 참조를 받아오는 함수
+  const handleMapRefs = (refs) => {
+    markersRef.current = refs.markers;
+    mapInstance.current = refs.mapInstance;
+  };
 
   return (
     <div className="min-h-screen font-['Pretendard']"
@@ -488,7 +530,7 @@ const SystemCheckScreen = ({ onLogoClick }) => {
         <header className="bg-white bg-opacity-95 backdrop-blur-sm border-b border-gray-200 mb-4 pb-4 rounded-lg shadow-lg">
           <div className="flex items-center justify-between px-4 py-3">
             <Logo onClick={onLogoClick} />
-            <StatusIndicator connected={connected} />
+            <StatusIndicator connected={status.droneConnection} />
           </div>
         </header>
 
@@ -507,8 +549,8 @@ const SystemCheckScreen = ({ onLogoClick }) => {
                     style={{ minHeight: '400px' }}>
                     <GoogleMapWithRef 
                       markers={[]} 
-                      coordinates={currentLocation}
-                      onMapRefs={setMapRefs}
+                      coordinates={coordinates}
+                      onMapRefs={handleMapRefs}
                     />
                   </div>
                   <div className="space-y-4 mb-6">
@@ -516,20 +558,17 @@ const SystemCheckScreen = ({ onLogoClick }) => {
                       <ChecklistItem
                         title="위치 확인"
                         description={
-                          error ? error :
-                          currentLocation ? 
-                          `위도: ${currentLocation.lat.toFixed(6)}, 경도: ${currentLocation.lng.toFixed(6)}` : 
+                          locationError ? locationError :
+                          coordinates ? 
+                          `위도: ${coordinates.lat.toFixed(6)}, 경도: ${coordinates.lng.toFixed(6)}` : 
                           '위치 확인 중...'
                         }
-                        checked={locationChecked}
-                        error={error ? true : false}
+                        checked={status.location}
+                        error={locationError ? true : false}
                       />
-                      {(error || currentLocation) && (
+                      {(locationError || coordinates) && (
                         <button
-                          onClick={() => {
-                            setLocationChecked(false);
-                            setCurrentLocation(null);
-                          }}
+                          onClick={getLocation}
                           className="px-4 py-2 border text-gray-600 rounded hover:bg-gray-50 
                           transition-colors shadow-sm text-sm"
                         >
@@ -539,17 +578,17 @@ const SystemCheckScreen = ({ onLogoClick }) => {
                     </div>
                     <ChecklistItem
                       title="드론 연결 상태"
-                      description={connected 
+                      description={status.droneConnection 
                         ? '드론이 정상적으로 연결되었습니다' 
                         : '드론 연결 중...'}
-                      checked={connected}
+                      checked={status.droneConnection}
                     />
                   </div>
                   <button
                     onClick={handleStartSearch}
-                    disabled={!locationChecked || !connected}
+                    disabled={!status.location || !status.droneConnection}
                     className={`w-full py-3 px-6 rounded transition-colors text-lg font-medium shadow-sm
-                      ${locationChecked && connected
+                      ${status.location && status.droneConnection
                         ? 'bg-blue-800 hover:bg-blue-900 text-white'
                         : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                       }`}
@@ -564,8 +603,8 @@ const SystemCheckScreen = ({ onLogoClick }) => {
                     <GoogleMapWithRef 
                       ref={mapRef}
                       markers={markers} 
-                      coordinates={currentLocation}
-                      onMapRefs={setMapRefs}
+                      coordinates={coordinates}
+                      onMapRefs={handleMapRefs}
                     />
                   </div>
                   
